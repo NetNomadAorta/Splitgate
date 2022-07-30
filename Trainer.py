@@ -20,7 +20,7 @@ from albumentations.pytorch import ToTensorV2
 
 
 # User parameters
-SAVE_NAME      = "./Models/Splitgate-0.model"
+SAVE_NAME      = "./Models/Splitgate-1.model"
 USE_CHECKPOINT = True
 # IMAGE_SIZE     = int(re.findall(r'\d+', SAVE_NAME)[-1] ) # Row and column size 
 DATASET_PATH   = "./Training_Data/" + SAVE_NAME.split("./Models/",1)[1].split("-",1)[0] +"/"

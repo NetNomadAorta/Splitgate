@@ -18,12 +18,25 @@ from torchvision.utils import save_image
 import matplotlib.pyplot as plt
 import win32api, win32con
 from win32api import SetCursorPos as Cursor
+from win32api import mouse_event as Cursor_2
+from math import sqrt
+import winsound
 
 
 # User parameters
-SAVE_NAME_OD = "./Models/Splitgate-0.model"
+SAVE_NAME_OD = "./Models/Splitgate-1.model"
 DATASET_PATH = "./Training_Data/" + SAVE_NAME_OD.split("./Models/",1)[1].split("-",1)[0] +"/"
-MIN_SCORE    = 0.7
+MIN_SCORE    = 0.6
+IMAGE_REDUCER_SCALER = 4
+MOUSE_TO_PIXEL_SCALER = 2/3
+GAME_MOUSE_SCALER_X = 1 # Default: 2.40
+GAME_MOUSE_SCALER_Y = 1 # Default: 2.55
+# squared_value = 0.65
+# cont_value_1 = 12
+# cont_value_2 = 1.1
+squared_value = 0.75
+cont_value_1 = 11
+cont_value_2 = 0
 
 
 def time_convert(sec):
@@ -34,25 +47,29 @@ def time_convert(sec):
     print("Time Lapsed = {0}h:{1}m:{2}s".format(int(hours), int(mins), round(sec) ) )
 
 
-def on_click(x, y, button, pressed):
-    print('{0} at {1}'.format(
-        'Pressed' if pressed else 'Released',
-        (x, y)))
+def click_and_coordinates():
+    points = []
+    buttons = []
     
-    if pressed and button == "Button.x2":
-        print(button)
-        # Stop listener
-        return False
+    def on_click(x, y, button, pressed):
+        if (pressed or not pressed) and str(button) == "Button.x2":
+            points.append([x, y])
+            buttons.append(button)
+            print(button)
+            # Stop listener
+            return False
+        
+        if not pressed:
+            # Stop listener
+            return False
     
-    if not pressed and button == "Button.x2":
-        # Stop listener
-        return False
-
-
-def click(x,y):
-    win32api.SetCursorPos((x,y))
-    # win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN,x,y,0,0)
-    # win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP,x,y,0,0)
+    with mouse.Listener(on_click=on_click) as listener:
+        listener.join()
+    
+    if len(points) > 0:
+        return points[0], buttons[0]
+    else:
+        return "null", "null"
 
 
 
@@ -88,33 +105,41 @@ torch.cuda.empty_cache()
 
 color_list = ['green', 'magenta', 'turquoise', 'red', 'green', 'orange', 'yellow', 'cyan', 'lime']
 
+# Windows beep settings
+frequency = 700  # Set Frequency To 2500 Hertz
+duration = 80  # Set Duration To 1000 ms == 1 second
+
+screenshot = ImageGrab.grab()
+screenshot_cv2 = np.array(screenshot)
+
+center_screen_x = (screenshot_cv2.shape[1]/2)/IMAGE_REDUCER_SCALER
+center_screen_y = (screenshot_cv2.shape[0]/2)/IMAGE_REDUCER_SCALER
+
 transforms_1 = A.Compose([
-    # A.Resize(int(frame.shape[0]/2), int(frame.shape[1]/2)),
+    A.Resize(int(screenshot_cv2.shape[0]/IMAGE_REDUCER_SCALER), 
+             int(screenshot_cv2.shape[1]/IMAGE_REDUCER_SCALER)),
     ToTensorV2()
 ])
 
 # Start FPS timer
 fps_start_time = time.time()
 ii = 0
-tenScale = 100
+tenScale = 50
 
 while True:
-    # Collect events until released
-    with mouse.Listener(on_click=on_click) as listener:
-        listener.join()
+    # # Collect events from mouse
+    # with mouse.Listener(on_click=on_click) as listener:
+    #     listener.join()
+    
+    # Collects events from mouse
+    # positions, button = click_and_coordinates()
     
     screenshot = ImageGrab.grab()
     
-    screenshot_x1 = 950
-    screenshot_y1 = 200
-    screenshot_x2 = 1970
-    screenshot_y2 = 1190
+    screenshot_cv2 = np.array(screenshot)
+    screenshot_cv2 = cv2.cvtColor(screenshot_cv2, cv2.COLOR_BGR2RGB)
     
-    screenshot_cropped = screenshot.crop((screenshot_x1, screenshot_y1, screenshot_x2, screenshot_y2))
-    screenshot_cropped_cv2 = np.array(screenshot_cropped)
-    screenshot_cropped_cv2 = cv2.cvtColor(screenshot_cropped_cv2, cv2.COLOR_BGR2RGB)
-    
-    transformed_image = transforms_1(image=screenshot_cropped_cv2)
+    transformed_image = transforms_1(image=screenshot_cv2)
     transformed_image = transformed_image["image"]
     
     with torch.no_grad():
@@ -122,9 +147,16 @@ while True:
         pred_1 = prediction_1[0]
     
     dieCoordinates = pred_1['boxes'][pred_1['scores'] > MIN_SCORE]
-    die_class_indexes = pred_1['labels'][pred_1['scores'] > MIN_SCORE].tolist()
+    die_class_indexes = pred_1['labels'][pred_1['scores'] > MIN_SCORE]
     # BELOW SHOWS SCORES - COMMENT OUT IF NEEDED
-    die_scores = pred_1['scores'][pred_1['scores'] > MIN_SCORE].tolist()
+    die_scores = pred_1['scores'][pred_1['scores'] > MIN_SCORE]
+    
+    enemy_coordinates_list = dieCoordinates[die_class_indexes > 0].tolist() # SHOULD "== 1].tolist()" FOR ENEMY
+    
+    die_class_indexes = die_class_indexes.tolist()
+    # BELOW SHOWS SCORES - COMMENT OUT IF NEEDED
+    die_scores = die_scores.tolist()
+    
     
     predicted_image = draw_bounding_boxes(transformed_image,
         boxes = dieCoordinates,
@@ -134,17 +166,54 @@ while True:
         colors = [color_list[i] for i in die_class_indexes]
         )
     
-    frame = predicted_image.permute(1,2,0).contiguous().numpy()
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    if len(enemy_coordinates_list) > 0:
+    # if len(enemy_coordinates_list) > 0 and str(button) == "Button.x2":
+        center_to_enemy_x_len_list = []
+        center_to_enemy_y_len_list = []
+        for enemy_coordinates in enemy_coordinates_list:
+            center_enemy_x = int(enemy_coordinates[0]
+                                +(enemy_coordinates[2]-enemy_coordinates[0])/2
+                                )
+            center_enemy_y = int(enemy_coordinates[1]
+                                +(enemy_coordinates[3]-enemy_coordinates[1])/4
+                                )
+            center_to_enemy_x_len_list.append(center_enemy_x - center_screen_x)
+            center_to_enemy_y_len_list.append(center_enemy_y - center_screen_y)
+        
+        hypotenuse_list = []
+        most_centered_hypotenuse = 100000
+        for index, enemy_coordinates in enumerate(enemy_coordinates_list):
+            hypotenuse = sqrt(center_to_enemy_y_len_list[index]**2 + center_to_enemy_x_len_list[index]**2)
+            if hypotenuse < most_centered_hypotenuse:
+                most_centered_hypotenuse = hypotenuse
+                most_centered_to_enemy_x = center_to_enemy_x_len_list[index]
+                most_centered_to_enemy_y = center_to_enemy_y_len_list[index]
+        
+        winsound.Beep(frequency, duration)
+        
+        x_move = most_centered_to_enemy_x * IMAGE_REDUCER_SCALER * MOUSE_TO_PIXEL_SCALER * GAME_MOUSE_SCALER_X
+        y_move = most_centered_to_enemy_y * IMAGE_REDUCER_SCALER * MOUSE_TO_PIXEL_SCALER * GAME_MOUSE_SCALER_Y
+        
+        if x_move < 0:
+            x_move = -cont_value_1*abs(x_move)**squared_value+cont_value_2*x_move
+        else:
+            x_move = cont_value_1*x_move**squared_value+cont_value_2*x_move
+        if y_move < 0:
+            y_move = -cont_value_1*abs(y_move)**squared_value+cont_value_2*y_move
+        else:
+            y_move = cont_value_1*y_move**squared_value+cont_value_2*y_move
+        
+        # Moves cursor
+        for i in range(5):
+            Cursor_2(win32con.MOUSEEVENTF_MOVE, 
+                     int(x_move/5), 
+                     int(y_move/5), 
+                     0, 0) 
+            time.sleep(0.0001)
+        
+        # Saves full image with bounding boxes
+        save_image((predicted_image/255), "test.jpg")
     
-    # window_name = 'image'
-    # cv2.imshow(window_name, frame)
-    # cv2.waitKey(1) 
-    
-    # # Saves full image with bounding boxes
-    # save_image((predicted_image/255), "test.jpg")
-    
-    plt.imshow(predicted_image.permute(1, 2, 0))
     
     
     ii += 1
