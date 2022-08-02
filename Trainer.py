@@ -26,7 +26,7 @@ USE_CHECKPOINT = True
 DATASET_PATH   = "./Training_Data/" + SAVE_NAME.split("./Models/",1)[1].split("-",1)[0] +"/"
 NUMBER_EPOCH   = 1000
 BATCH_SIZE     = 32
-LEARNING_RATE  = 0.0001*BATCH_SIZE # Default: Work_PC: 0.0001*BATCH_SIZE (WITH RESNET50 MODEL! NOT MOBIlENET)
+LEARNING_RATE  = 0.00001*BATCH_SIZE # Default: Work_PC: 0.0001*BATCH_SIZE (WITH RESNET50 MODEL! NOT MOBIlENET)
 
 # Transformation Parameters:
 BLUR_PROB           = 0.05  # Default: 0.05 

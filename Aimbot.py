@@ -15,12 +15,11 @@ from pycocotools.coco import COCO
 from albumentations.pytorch import ToTensorV2
 from pynput import mouse
 from torchvision.utils import save_image
-import matplotlib.pyplot as plt
-import win32api, win32con
-from win32api import SetCursorPos as Cursor
+import win32con
 from win32api import mouse_event as Cursor_2
 from math import sqrt
 import winsound
+import win32gui, win32ui, win32con
 
 
 # User parameters
@@ -31,12 +30,12 @@ IMAGE_REDUCER_SCALER = 4
 MOUSE_TO_PIXEL_SCALER = 2/3
 GAME_MOUSE_SCALER_X = 1 # Default: 2.40
 GAME_MOUSE_SCALER_Y = 1 # Default: 2.55
-# squared_value = 0.65
-# cont_value_1 = 12
-# cont_value_2 = 1.1
-squared_value = 0.75
-cont_value_1 = 11
-cont_value_2 = 0
+squared_value = 0.65
+cont_value_1 = 12
+cont_value_2 = 1.1
+# squared_value = 0.75
+# cont_value_1 = 11
+# cont_value_2 = 0
 
 
 def time_convert(sec):
@@ -70,6 +69,43 @@ def click_and_coordinates():
         return points[0], buttons[0]
     else:
         return "null", "null"
+
+
+def window_capture():
+    w = 5120
+    h = 1440
+    
+    # hwnd = win32gui.FindWindow(None, windowname)
+    hwnd = None
+    
+    wDC = win32gui.GetWindowDC(hwnd)
+    dcObj = win32ui.CreateDCFromHandle(wDC)
+    cDC = dcObj.CreateCompatibleDC()
+    dataBitMap = win32ui.CreateBitmap()
+    dataBitMap.CreateCompatibleBitmap(dcObj, w, h)
+    cDC.SelectObject(dataBitMap)
+    cDC.BitBlt((0, 0), (w, h), dcObj, (0, 0), win32con.SRCCOPY)
+    
+    # Save the screenshot
+    # dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
+    signedIntsArray = dataBitMap.GetBitmapBits(True)
+    img = np.fromstring(signedIntsArray, dtype='uint8')
+    img.shape = (h, w, 4)
+    
+    # Free Resource
+    dcObj.DeleteDC()
+    cDC.DeleteDC()
+    win32gui.ReleaseDC(hwnd, wDC)
+    win32gui.DeleteObject(dataBitMap.GetHandle())
+    
+    # Drop the alpha channel, or cv.matchTemplate()
+    img = img[...,:3]
+    
+    img = np.ascontiguousarray(img)
+    
+    return img
+    
+    
 
 
 
@@ -127,14 +163,11 @@ ii = 0
 tenScale = 50
 
 while True:
-    # # Collect events from mouse
-    # with mouse.Listener(on_click=on_click) as listener:
-    #     listener.join()
-    
     # Collects events from mouse
-    # positions, button = click_and_coordinates()
+    positions, button = click_and_coordinates()
     
     screenshot = ImageGrab.grab()
+    # screenshot = window_capture()
     
     screenshot_cv2 = np.array(screenshot)
     screenshot_cv2 = cv2.cvtColor(screenshot_cv2, cv2.COLOR_BGR2RGB)
@@ -166,8 +199,8 @@ while True:
         colors = [color_list[i] for i in die_class_indexes]
         )
     
-    if len(enemy_coordinates_list) > 0:
-    # if len(enemy_coordinates_list) > 0 and str(button) == "Button.x2":
+    # if len(enemy_coordinates_list) > 0:
+    if len(enemy_coordinates_list) > 0 and str(button) == "Button.x2":
         center_to_enemy_x_len_list = []
         center_to_enemy_y_len_list = []
         for enemy_coordinates in enemy_coordinates_list:
@@ -189,8 +222,6 @@ while True:
                 most_centered_to_enemy_x = center_to_enemy_x_len_list[index]
                 most_centered_to_enemy_y = center_to_enemy_y_len_list[index]
         
-        winsound.Beep(frequency, duration)
-        
         x_move = most_centered_to_enemy_x * IMAGE_REDUCER_SCALER * MOUSE_TO_PIXEL_SCALER * GAME_MOUSE_SCALER_X
         y_move = most_centered_to_enemy_y * IMAGE_REDUCER_SCALER * MOUSE_TO_PIXEL_SCALER * GAME_MOUSE_SCALER_Y
         
@@ -203,12 +234,14 @@ while True:
         else:
             y_move = cont_value_1*y_move**squared_value+cont_value_2*y_move
         
+        winsound.Beep(frequency, duration)
+        
         # Moves cursor
         for i in range(5):
             Cursor_2(win32con.MOUSEEVENTF_MOVE, 
-                     int(x_move/5), 
-                     int(y_move/5), 
-                     0, 0) 
+                      int(x_move/5), 
+                      int(y_move/5), 
+                      0, 0) 
             time.sleep(0.0001)
         
         # Saves full image with bounding boxes
