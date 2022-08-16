@@ -262,17 +262,35 @@ def train_one_epoch(model, optimizer, loader, device, epoch):
 num_epochs = NUMBER_EPOCH
 prev_saved_all_losses = 100
 prev_saved_obj_loss = 100
+prev_saved_weighted_loss = 100
 
 for epoch in range(num_epochs):
     all_losses, obj_loss = train_one_epoch(model, optimizer, train_loader, device, epoch)
+    if obj_loss/all_losses < 0.01:
+        weighted_obj_loss = 9*obj_loss
+    elif obj_loss/all_losses < 0.03:
+        weighted_obj_loss = 4*obj_loss
+    elif obj_loss/all_losses < 0.05:
+        weighted_obj_loss = 2*obj_loss
+    else:
+        weighted_obj_loss = obj_loss
+    weighted_loss = all_losses + weighted_obj_loss
     
-    # Saves model
-    if (obj_loss < prev_saved_obj_loss 
-        or all_losses < (prev_saved_all_losses*0.90) ): # DEfault 0.85
+    # Saves model - version 2 - can comment out if wanted
+    if weighted_loss < prev_saved_weighted_loss:
         torch.save(model.state_dict(), SAVE_NAME)
-        prev_saved_obj_loss = obj_loss
-        prev_saved_all_losses = all_losses
-
+        print("   Saved model!\n")
+        prev_saved_weighted_loss = weighted_loss
+        prev_saved_obj_loss = obj_loss # Not needed, but just curious
+        prev_saved_all_losses = all_losses # Not needed, but just curious
+    
+    # # Saves model
+    # if (obj_loss < prev_saved_obj_loss 
+    #     or all_losses < (prev_saved_all_losses*0.9) ): # DEfault 0.85
+    #     torch.save(model.state_dict(), SAVE_NAME)
+    #     print("   Saved model!")
+    #     prev_saved_obj_loss = obj_loss
+    #     prev_saved_all_losses = all_losses
 
 torch.cuda.empty_cache()
 
